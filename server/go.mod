@@ -3,6 +3,7 @@ module demo/app-1
 go 1.26.4
 
 require (
+	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/knetic/govaluate v3.0.0+incompatible // indirect
 	github.com/labstack/echo/v4 v4.15.4 // indirect

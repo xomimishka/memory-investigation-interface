@@ -25,7 +25,6 @@ function App() {
 
       {events.map((item, index) => (
         <div key={index}>
-          <b>Совпадение: {item.score}%</b>
           <pre>{JSON.stringify(item.event, null, 2)}</pre>
         </div>
       ))}

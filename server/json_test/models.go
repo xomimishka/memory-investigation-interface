@@ -29,3 +29,4 @@ type CustomPerson struct {
 	Address Address
 }
 
+// изучила темы го котяра

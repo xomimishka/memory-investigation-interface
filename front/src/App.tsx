@@ -8,20 +8,65 @@ function App() {
   const [destinationType, setDestinationType] = useState("");
 
   const [events, setEvents] = useState<any[]>([]);
+  const [message, setMessage] = useState("");
 
   async function search() {
-    const res = await axios.post("http://localhost:8080/search", {
-      hints: {
-        user_id: user,
-        file_name: fileName,
-        action: action,
-        destination_type: destinationType,
-      },
+    console.log({
+      user,
+      fileName,
+      action,
+      destinationType
     });
 
-    setEvents(res.data.candidates);
-  }
+    if (
+      user === "" &&
+      fileName === "" &&
+      action === "" &&
+      destinationType === ""
+    ) {
+      setEvents([]);
+      setMessage("Введите данные для поиска");
+      return;
+    }
 
+    setMessage("");
+    setEvents([]);
+
+    try {
+      const res = await axios.post(
+        "http://localhost:8080/api/search",
+        {
+          dataset_id: "control",
+          hints: {
+            user_id: user,
+            file_name: fileName,
+            action: action,
+            destination_type: destinationType,
+          },
+        }
+      );
+
+      const candidates = res.data.candidates ?? [];
+
+      if (candidates.length === 0) {
+        setMessage("Ничего не найдено");
+      } else {
+        setEvents(candidates);
+      }
+
+    } catch (error: any) {
+      console.log(error);
+      if (error.response) {
+        setMessage(
+          "Ошибка сервера: " + error.response.data
+        );
+      }
+      else {
+        setMessage("бэк недоступен!");
+      }
+
+    }
+  }
   return (
     <div>
       <input
@@ -48,17 +93,29 @@ function App() {
         placeholder="Destination type"
       />
 
-      <button onClick={search}>Поиск</button>
+      <button onClick={search}>
+        Поиск
+      </button>
+
+      {message && (
+        <p>
+          {message}
+        </p>
+      )}
 
       {events.map((item: any) => (
         <div key={item.event.event_id}>
-          <div>Score: {item.score}</div>
-
-          <div>
-            Совпадения: {item.matched_hints.join(", ")}
-          </div>
-
-          <pre>{JSON.stringify(item.event, null, 2)}</pre>
+          <p>
+            Score: {item.score}
+          </p>
+          <p>
+            Совпадения:
+            {" "}
+            {item.matched_hints.join(", ")}
+          </p>
+          <pre>
+            {JSON.stringify(item.event, null, 2)}
+          </pre>
         </div>
       ))}
     </div>

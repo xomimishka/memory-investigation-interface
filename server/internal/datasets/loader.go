@@ -1,27 +1,29 @@
-package main
+package datasets
 
 import (
 	"bufio"
 	"encoding/json"
-	"os"
 	"log"
+	"os"
+
+	"event-memory-search-api/internal/domain"
 )
 
-func loadEvents(path string) []Event {
+func LoadEvents(path string) []domain.Event {
 	file, err := os.Open(path)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer file.Close()
 
-	var events []Event
+	var events []domain.Event
 
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		var event Event
+		var event domain.Event
 
-		if json.Unmarshal(scanner.Bytes(), &event) == nil {
+		if err := json.Unmarshal(scanner.Bytes(), &event); err == nil {
 			events = append(events, event)
 		}
 	}
@@ -29,5 +31,6 @@ func loadEvents(path string) []Event {
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
+
 	return events
 }

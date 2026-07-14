@@ -1,4 +1,4 @@
-package main
+package domain
 
 type Event struct {
 	EventID         string   `json:"event_id"`
@@ -35,8 +35,13 @@ type SearchResult struct {
 }
 
 type SearchResponse struct {
+	SearchID string `json:"search_id"`
 	Status          string         `json:"status"`
 	DatasetID       string         `json:"dataset_id"`
 	TotalCandidates int            `json:"total_candidates"`
 	Candidates      []SearchResult `json:"candidates"`
+}
+
+type EventContext struct {
+	Event Event `json:"event"`
 }

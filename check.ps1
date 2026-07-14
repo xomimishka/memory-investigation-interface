@@ -15,12 +15,7 @@ function Get-CheckGoCommand {
         return $go.Source
     }
 
-    $fallback = 'K:\go\go1.20.14\bin\go.exe'
-    if (Test-Path -LiteralPath $fallback) {
-        return $fallback
-    }
-
-    return 'go'
+    throw 'go executable was not found in PATH. Install Go and make sure go is available in PATH.'
 }
 
 function New-CheckContext {
@@ -560,4 +555,5 @@ Complete-Check -Ctx $ctx -Extra @{
     expected_api = @('/api/health', '/api/datasets', 'POST /api/search', 'GET /api/search/{id}', 'GET /api/events/{id}/context', 'GET /api/search/{id}/candidates/{event_id}/explain')
     port = $Port
 }
+
 

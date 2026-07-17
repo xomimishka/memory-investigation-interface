@@ -298,11 +298,17 @@ function Add-StandardEngineeringAssessments {
     if ($Ctx.CommandResults.ContainsKey('go_test_all')) {
         Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.go_test_passes' -Level 'engineering' -Category 'tests' -Requirement 'go test ./... passes' -CommandName 'go_test_all'
     }
-    if ($Ctx.CommandResults.ContainsKey('go_test_bench')) {
-        Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.benchmarks_run' -Level 'engineering' -Category 'benchmarks' -Requirement 'Benchmark tests run' -CommandName 'go_test_bench'
-    }
     if ($Ctx.CommandResults.ContainsKey('go_test_race')) {
         Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.race_test_passes' -Level 'engineering' -Category 'tests' -Requirement 'go test -race ./... passes' -CommandName 'go_test_race'
+    }
+    if ($Ctx.CommandResults.ContainsKey('make_test')) {
+        Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.make_test_runs' -Level 'engineering' -Category 'reproducibility' -Requirement 'make test passes' -CommandName 'make_test'
+    }
+    if ($Ctx.CommandResults.ContainsKey('make_bench')) {
+        Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.make_bench_runs' -Level 'engineering' -Category 'reproducibility' -Requirement 'make bench passes' -CommandName 'make_bench'
+    }
+    if ($Ctx.CommandResults.ContainsKey('make_demo')) {
+        Add-CommandFeatureAssessment -Ctx $Ctx -Id 'engineering.make_demo_runs' -Level 'engineering' -Category 'reproducibility' -Requirement 'make demo passes' -CommandName 'make_demo'
     }
 
     $readmePath = Join-Path $Ctx.RepoRoot 'README.md'
@@ -443,7 +449,10 @@ $requestPath = Write-CheckText -Ctx $ctx -RelativePath 'inputs/search_request.js
       {"action": "email_send"}
     ]
   },
-  "limit": 20
+  "scoring": {
+    "min_score": 50,
+    "limit": 20
+  }
 }
 '@
 
@@ -451,6 +460,7 @@ Invoke-CheckCommand -Ctx $ctx -Name 'go_test_all' -Command "& '$($ctx.GoCmd)' te
 
 if (Test-Path -LiteralPath (Join-Path $ctx.RepoRoot 'Makefile')) {
     Invoke-CheckCommand -Ctx $ctx -Name 'make_test' -Command 'make test'
+    Invoke-CheckCommand -Ctx $ctx -Name 'make_bench' -Command 'make bench'
     Invoke-CheckCommand -Ctx $ctx -Name 'make_demo' -Command 'make demo'
 }
 
@@ -459,13 +469,13 @@ $serverStderr = Join-Path $ctx.LogsDir 'server_stderr.log'
 $serverExe = Join-Path $ctx.OutputsDir 'event-memory-search-api.exe'
 Invoke-CheckCommand -Ctx $ctx -Name 'build_api_server' -Command "& '$($ctx.GoCmd)' build -o '$serverExe' ./cmd/event-memory-search-api"
 
-$oldPort = $env:PORT
-$env:PORT = [string]$Port
-$proc = Start-Process -FilePath $serverExe -WorkingDirectory $ctx.RepoRoot -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr -PassThru -WindowStyle Hidden
-$env:PORT = $oldPort
+$datasetDir = Join-Path $ctx.RepoRoot 'testdata\datasets'
+$serverArgs = @('serve', '--datasets', $datasetDir, '--addr', "127.0.0.1:$Port")
+$proc = Start-Process -FilePath $serverExe -ArgumentList $serverArgs -WorkingDirectory $ctx.RepoRoot -RedirectStandardOutput $serverStdout -RedirectStandardError $serverStderr -PassThru -WindowStyle Hidden
 Save-CheckJson -Path (Join-Path $ctx.MetaDir 'server_process.json') -Value ([ordered]@{
     pid = $proc.Id
     port = $Port
+    args = $serverArgs
     started_at = (Get-Date).ToString('o')
 })
 
@@ -537,16 +547,18 @@ Save-CheckJson -Path (Join-Path $ctx.OutputsDir 'artifact_presence.json') -Value
 Add-CommandFeatureAssessment -Ctx $ctx -Id 'minimum.health' -Level 'minimum' -Category 'api' -Requirement 'Backend starts and answers /api/health' -CommandName 'api_wait_health' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'health.json'))
 Add-CommandFeatureAssessment -Ctx $ctx -Id 'minimum.datasets' -Level 'minimum' -Category 'api' -Requirement 'GET /api/datasets returns datasets' -CommandName 'api_datasets' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'datasets.json'))
 Add-CommandFeatureAssessment -Ctx $ctx -Id 'minimum.search' -Level 'minimum' -Category 'api' -Requirement 'POST /api/search returns candidates' -CommandName 'api_search_flow' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'search_response.json'))
-Add-CommandFeatureAssessment -Ctx $ctx -Id 'minimum.search_by_id' -Level 'minimum' -Category 'api' -Requirement 'GET /api/search/{search_id} returns result' -CommandName 'api_search_flow' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'search_by_id.json'))
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'minimum.scoring' -Level 'minimum' -Category 'algorithm' -Requirement 'Candidates are ranked by score and matched_hints' -Patterns @('score|Score','matched_hints|MatchedHints') -Match 'all'
 
+Add-CommandFeatureAssessment -Ctx $ctx -Id 'good.search_by_id' -Level 'good' -Category 'api' -Requirement 'GET /api/search/{search_id} returns result' -CommandName 'api_search_flow' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'search_by_id.json'))
 Add-CommandFeatureAssessment -Ctx $ctx -Id 'good.context' -Level 'good' -Category 'api' -Requirement 'GET /api/events/{event_id}/context returns context' -CommandName 'api_event_context' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'event_context.json'))
 Add-CommandFeatureAssessment -Ctx $ctx -Id 'good.explain' -Level 'good' -Category 'api' -Requirement 'Explain endpoint returns score breakdown' -CommandName 'api_explain' -RequiredArtifacts @((Join-Path $ctx.OutputsDir 'explain.json'))
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'good.time_filter' -Level 'good' -Category 'algorithm' -Requirement 'around and tolerance are used' -Patterns @('around|Around','tolerance|Tolerance','time\.Parse|ParseDuration') -Match 'all'
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'good.nearby' -Level 'good' -Category 'algorithm' -Requirement 'require_nearby and before after windows are used' -Patterns @('require_nearby|RequireNearby','before|Before','after|After') -Match 'all'
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'good.structured_errors' -Level 'good' -Category 'api' -Requirement 'API returns structured errors' -Patterns @('error.*json|ErrorResponse|WriteHeader') -Match 'any'
+Add-BooleanFeatureAssessment -Ctx $ctx -Id 'good.api_docs' -Level 'good' -Category 'documentation' -Requirement 'OpenAPI or docs/api.md exists' -Implemented ((Test-Path -LiteralPath (Join-Path $ctx.RepoRoot 'docs\api.md')) -or (Select-String -Path (Join-Path $ctx.RepoRoot '**\*') -Pattern 'openapi|swagger' -ErrorAction SilentlyContinue -Quiet)) -Conformant ((Test-Path -LiteralPath (Join-Path $ctx.RepoRoot 'docs\api.md')) -or (Select-String -Path (Join-Path $ctx.RepoRoot '**\*') -Pattern 'openapi|swagger' -ErrorAction SilentlyContinue -Quiet)) -Evidence @('docs/api.md')
+$backendMakefileText = if (Test-Path -LiteralPath (Join-Path $ctx.RepoRoot 'Makefile')) { Get-Content -LiteralPath (Join-Path $ctx.RepoRoot 'Makefile') -Raw } else { '' }
+Add-BooleanFeatureAssessment -Ctx $ctx -Id 'engineering.make_serve' -Level 'engineering' -Category 'reproducibility' -Requirement 'Makefile has target serve' -Implemented ($backendMakefileText -match '(?m)^\s*serve\s*:') -Conformant ($backendMakefileText -match '(?m)^\s*serve\s*:') -Evidence @('repo_snapshot/Makefile')
 
-Add-SourceFeatureAssessment -Ctx $ctx -Id 'excellent.api_docs' -Level 'excellent' -Category 'documentation' -Requirement 'OpenAPI or docs/api.md exists' -Patterns @('openapi|swagger|docs/api\.md') -Match 'any'
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'excellent.large_dataset' -Level 'excellent' -Category 'performance' -Requirement 'Large dataset search benchmark exists' -Patterns @('Benchmark','100000') -Match 'all'
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'excellent.frontend_integration' -Level 'excellent' -Category 'integration' -Requirement 'Reproducible frontend backend demo exists' -Patterns @('frontend|vite|npm','demo') -Match 'all'
 Add-SourceFeatureAssessment -Ctx $ctx -Id 'excellent.error_cases' -Level 'excellent' -Category 'tests' -Requirement 'Invalid time wide window and dataset errors are tested' -Patterns @('invalid.*time|bad.*time','dataset','tolerance|window') -Match 'all'
